@@ -1,0 +1,459 @@
+---
+title: 'Obesity Analysis'
+author: "Sara Monica"
+date: "`r format(Sys.Date(), '%B %e, %Y')`"
+output:
+  rmdformats::downcute:
+    code_folding : hide
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: true
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+# chunk options
+knitr::opts_chunk$set(message = FALSE, fig.align = "center")
+```
+
+
+# Introduction
+Nowadays, Obesity is one of the most prominent health-related issues faced by the people across globe. Due to this very reason, it is very crucial to analyze the issue deeply.
+This dataset include data for the estimation of obesity levels based on their eating habits and physical condition in individuals from the countries of Mexico, Peru and Colombia. Using the “ggplot” library primarily, we try to visualize and get some insights of the under-lying patterns for the people of these countries.
+
+## About the Dataset
+The data contains 17 attributes and 2111 records, the records are labeled with the class variable NObesity (Obesity Level), that allows classification of the data using the values of Insufficient Weight, Normal Weight, Overweight Level I, Overweight Level II, Obesity Type I, Obesity Type II and Obesity Type III. 77% of the data was generated synthetically using the Weka tool and the SMOTE filter, 23% of the data was collected directly from users through a web platform.
+
+The dataset can be found here : https://archive-beta.ics.uci.edu/ml/datasets/estimation+of+obesity+levels+based+on+eating+habits+and+physical+condition
+
+
+- Columns Description :
+    - Gender : Female/Male
+    - Age : Numeric value
+    - Height : Numeric value in meters 
+    - Weight : Numeric value in kilograms
+    - Family History With Over Weight 
+    - FAVC : Frequent consumption of high caloric food, 
+    - FCVC : Frequency of consumption of vegetables
+    - NCP  : Number of main meals
+    - CAEC : Consumption of food between meals
+    - CH20 : Consumption of water daily
+    - CALC : Consumption of alcohol 
+    - SCC  : Calories consumption monitoring
+    - FAF  : Physical activity frequency
+    - TUE  : Time using technology devices
+    - MTRANS : Transportation used
+
+# Data Input and Inspection
+
+> Importing the required packages and libraries
+
+```{r}
+#Library List
+library(tidyverse)
+library(ggpubr)
+library(scales)
+library(glue)
+library(plotly)
+library(ggplot2)
+library(stringr)
+library(GGally)
+library(dplyr)
+library(viridis)
+library(rmdformats)
+```
+
+## Data Input: 
+
+> Read "obesity.csv" as obesity and rename the columns and round the number(value) into integer 
+
+```{r}
+obesity <- read.csv("data/obesity.csv", stringsAsFactors = T)
+names(obesity) <- c("Gender", "Age", "Height", "Weight", "Family_History_with_Overweight",
+       "Frequent_consumption_of_high_caloric_food", "Frequency_of_consumption_of_vegetables", "Number_of_main_meals", "Consumption_of_food_between_meals", "Smoke", "Consumption_of_water_daily", "Calories_consumption_monitoring", "Physical_activity_frequency", "Time_using_technology_devices",
+       "Consumption_of_alcohol", "Transportation_used", "Obesity")
+obesity <- obesity %>% mutate_at(vars(Frequency_of_consumption_of_vegetables, Number_of_main_meals,Consumption_of_water_daily, Physical_activity_frequency, Time_using_technology_devices), funs(round(.,0)))
+str(obesity)
+```
+
+> Save edited data to .csv format and load it as "obesity_new"
+
+```{r}
+write_csv(obesity,"data/obesity_new.csv" )
+obesity_new <- read.csv("data/obesity_new.csv", stringsAsFactors = T)
+str(obesity_new)
+```
+
+
+## Data Inspection :
+
+> Change selected columuns to factor format
+
+```{r}
+obesity_new <- obesity_new %>% mutate(Frequency_of_consumption_of_vegetables = as.factor(Frequency_of_consumption_of_vegetables),
+                              Number_of_main_meals = as.factor(Number_of_main_meals),
+                              Consumption_of_water_daily = as.factor(Consumption_of_water_daily),
+                              Physical_activity_frequency = as.factor(Physical_activity_frequency),
+                              Time_using_technology_devices = as.factor(Time_using_technology_devices))
+```
+
+> List old Factor Name and Create the new Factor Name
+
+```{r}
+old_1 <- c("1", "2", "3")
+old_2 <- c("1", "2", "3", "4")
+old_3 <- c("1", "2", "3")
+old_4 <- c("0", "1", "2", "3")
+old_5 <- c("0", "1", "2")
+
+new_1 <- c("Never", "Sometimes", "Always")
+new_2 <- c("1", "2", "3", "3+")
+new_3 <- c("Less than a liter", "Between 1 and 2 L", "More than 2 L")
+new_4 <- c("I do not have", "1 - 2 times", "3 - 4 times", "More than 4 times")
+new_5 <- c("0–2 hours", "3–5 hours", "More than 5 hours")
+```
+
+> Assign the New Factor Name into dataframe
+
+```{r}
+obesity_new$Frequency_of_consumption_of_vegetables <- do.call(
+  fct_recode,
+  c(list(obesity_new$Frequency_of_consumption_of_vegetables), setNames(old_1, new_1)))
+
+obesity_new$Number_of_main_meals <- do.call(
+  fct_recode,
+  c(list(obesity_new$Number_of_main_meals), setNames(old_2, new_2)))
+
+obesity_new$Consumption_of_water_daily <- do.call(
+  fct_recode,
+  c(list(obesity_new$Consumption_of_water_daily), setNames(old_3, new_3)))
+
+obesity_new$Physical_activity_frequency <- do.call(
+  fct_recode,
+  c(list(obesity_new$Physical_activity_frequency), setNames(old_4, new_4)))
+
+obesity_new$Time_using_technology_devices <- do.call(
+  fct_recode,
+  c(list(obesity_new$Time_using_technology_devices), setNames(old_5, new_5)))
+```
+
+> Check the Missing Value of the data
+
+```{r}
+colSums(is.na(obesity_new))
+```
+
+> Change Height matric from Meter to Centimeter by multiply the value with 100
+
+```{r}
+obesity_new <- obesity_new %>% mutate_at(vars(Age, Weight), funs(round(.,0)))
+obesity_new$Height <- obesity_new$Height *100
+```
+# Data Visualization : 
+
+## Correlation Between Height and Weight in Type Of Obesity
+```{r}
+obesity_cor <- obesity_new %>%
+  select(c(Obesity, Height, Weight))
+
+plotob_cor <- ggplot(data = obesity_cor, mapping = aes(x = Height, y = Weight, col = Obesity))+
+  geom_point(aes(col = Obesity))+
+  geom_smooth(method=lm , color="black", se=FALSE, formula = y~x) +
+  scale_fill_viridis(discrete = T, option = "C") +
+  labs(title = list(text = paste0('Correlation of Height and Weight')),
+    x = "Height (cm)",
+    y = "Weight (Kg)"
+  ) +
+  theme(legend.title = element_blank(),
+        plot.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "#ffffff"),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.x = element_line())
+ggplotly(plotob_cor, tooltip = "text")
+ob_corr <- cor(obesity_cor$Height, obesity_cor$Weight)
+```
+> According to the data, the correlation between height and weight is weakly positive (0.46)
+
+
+## Height and Weight Distribution based on Gender
+```{r}
+height_weight <- obesity_new %>%
+  select(c(Gender, Height, Weight))
+height_weight <- pivot_longer(data = height_weight,
+                           cols = c("Height","Weight"),
+                           names_to = "variabel")
+
+plothw <- ggplot(data = height_weight, mapping = aes(x = Gender, y = value))+
+  geom_boxplot(aes(fill=Gender), position = "dodge")+
+  facet_wrap(vars(variabel)) + #memisahkan plot berdasarkan variable parameter
+  labs(title = list(text = paste0('Height and Weight Distribution Based on Gender')),
+    x = "Gender",
+    y = "Height (cm) / Weight (Kg)"
+  ) +
+  theme(legend.title = element_blank(),
+        plot.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "#ffffff"),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.x = element_line())
+  
+ggplotly(plothw, tooltip = "text")
+```
+> The box plots show the distribution of Height and Weight based on Gender wise. The plots highlight that the median height of females in the sample is significantly lower than that of males, with a few of males surpassing 1.98 meters (outliers).   In terms of their weights, though, the difference is not as significant. While, one individual with a weight of more than 165 kg is considered an outlier.
+
+## Obesity Type Distribution on Gender
+```{r}
+obs_gender <- obesity_new %>%
+  select(c(Gender, Obesity)) %>%
+  group_by(Gender, Obesity)  %>% 
+  summarise(total = n()) %>%
+  mutate(label = glue("Total : {total}"))
+
+plotog <- ggplot(data = obs_gender, aes(x = Obesity, y = total, fill = Gender, text = label))+
+  geom_col(position = "dodge")+
+  facet_wrap(vars(Gender)) + #memisahkan plot berdasarkan variable parameter
+  scale_fill_viridis(discrete = T, option = "C") +
+  labs(title = list(text = paste0('Obesity Type based on Gender')),
+    x = "Gender",
+    y = "Total"
+  ) +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(hjust = 1, angle = 20),
+        plot.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "#ffffff"),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.x = element_line()) +
+  coord_flip()
+  
+ggplotly(plotog, tooltip = "text")
+```
+
+
+## Obesity distribution based on Two Related Variabel 
+### Analyzing the effect of consuming high caloric food and physical activity frequnecy on the Obesity level
+```{r}
+#DATA COSTUM A
+calories_activity <- obesity_new %>%
+  select(c(Frequent_consumption_of_high_caloric_food, Physical_activity_frequency, Obesity)) %>%
+  group_by(Obesity, Frequent_consumption_of_high_caloric_food, Physical_activity_frequency ) %>%
+  summarise(count = n()) %>%
+  ungroup()
+calories_activity <- calories_activity %>% mutate(label = glue("Total : {count}
+                                                                Obesity Type : {Obesity}
+                                                                Frequent Consumpyion Of High Caloric Food : {Frequent_consumption_of_high_caloric_food}
+                                                                Frequency of Physical Activity : {Physical_activity_frequency}"))
+```
+
+```{r}
+plota <- ggplot(calories_activity, aes(x = Physical_activity_frequency, y = count, fill = Obesity, text = label)) +
+        geom_col(position = "dodge") +
+        facet_wrap(vars(Frequent_consumption_of_high_caloric_food)) +
+        scale_fill_viridis(discrete = T, option = "C") +
+        scale_x_discrete(expand = expansion(mult = c(0.0001, 0.0001)),
+                         labels = function(x) str_wrap(x, width = 10))+
+        labs(title = "Frequently Consuming High Caloric Food :",
+             x = 'Frequency of Physical Activity',
+             y = NULL,
+             fill = NULL) +
+        theme(legend.title = element_text(),
+              axis.text.x = element_text(hjust = 1, angle = 20),
+              plot.title = element_text(face = "bold"),
+              panel.background = element_rect(fill = "#ffffff"),
+              axis.line.y = element_line(colour = "grey"),
+              axis.line.x = element_blank(),
+              panel.grid = element_blank())
+ggplotly(plota, tooltip = "text")
+```
+> The  bar plot clearly shows that most of the population who are not consuming high caloric food are rarely classified as Obese. Meanwhile, individuals who consume high-calorie foods and exercise less than three times per week are more likely to be diagnose as obese.
+
+### Analyzing the effect of the number of main meals dan monitoring calorie and on the Obesity level
+```{r}
+## DATA CUSTOM B
+calories_meals <- obesity_new %>%
+  select(c(Calories_consumption_monitoring, Number_of_main_meals, Obesity)) %>%
+  group_by(Calories_consumption_monitoring, Number_of_main_meals, Obesity) %>%
+  summarise(count = n()) %>%
+  ungroup()
+calories_meals <- calories_meals %>% mutate(label = glue("Total : {count}
+                                                          Obesity Type : {Obesity}
+                                                          Calories Consumpyion Monitorting : {Calories_consumption_monitoring}
+                                                          Number of Main Meals : {Number_of_main_meals}"))
+```
+
+```{r}
+plotb <- ggplot(calories_meals, aes(x = Number_of_main_meals, y = count, fill = Obesity, text = label)) +
+        geom_col(position = "dodge") +
+        facet_wrap(vars(Calories_consumption_monitoring)) +
+        scale_fill_viridis(discrete = T, option = "C") +
+        scale_x_discrete(expand = expansion(mult = c(0.0001, 0.0001)))+
+        labs(title = "Calories Consumption Monitoring",
+             x = "Number of Main Meals",
+             y = NULL,
+             fill = "Obesity Type") +
+        theme(legend.title = element_blank(),
+              axis.text.x = element_text(hjust = 1),
+              plot.title = element_text(face = "bold"),
+              panel.background = element_rect(fill = "#ffffff"),
+              axis.line.y = element_line(colour = "grey"),
+              axis.line.x = element_blank(),
+              panel.grid = element_blank())
+ggplotly(plotb, tooltip = "text")
+```
+> This bar graph indicates that individuals who are categorized as obese are majorly those who do not track their calories and the majority of the population who consumes their main meal three times every day.
+
+### Analyzing the effect of the food consumption between meals dan the family history with overweight on the Obesity level
+```{r}
+## DATA CUSTOM 3
+gene_snack <- obesity_new %>%
+  select(c(Family_History_with_Overweight, Consumption_of_food_between_meals, Obesity)) %>%
+  group_by(Family_History_with_Overweight, Consumption_of_food_between_meals, Obesity) %>%
+  summarise(count = n()) %>%
+  ungroup()
+gene_snack <- gene_snack %>% mutate(label = glue("Total : {count}
+                                                          Obesity Type : {Obesity}
+                                                          Family History with Overweight : {Family_History_with_Overweight}
+                                                          Consumption of food between of Meals : {Consumption_of_food_between_meals}"))
+```
+
+```{r}
+#"Distribution of Obesity Type on Food Consumption Between Meals and Family History of Overweight"
+plotc <- ggplot(gene_snack, mapping = aes(x = Consumption_of_food_between_meals, y = count, fill = Obesity, text = label)) +
+        geom_col(position = "dodge") +
+        facet_wrap(vars(Family_History_with_Overweight)) +
+        scale_fill_viridis(discrete = T, option = "C") +
+        scale_x_discrete(expand = expansion(mult = c(0.0001, 0.0001)))+
+        labs(title = "Family History with Overweight",
+             x = "Consumption Of Food Between Meals",
+             y = NULL,
+             fill = "Obesity Type") +
+        theme(legend.title = element_blank(),
+              axis.text.x = element_text(),
+              plot.title = element_text(face = "bold"),
+              panel.background = element_rect(fill = "#ffffff"),
+              axis.line.y = element_line(colour = "grey"),
+              axis.line.x = element_blank(),
+              panel.grid = element_blank())
+ggplotly(plotc, tooltip = "text")
+```
+> Looking at the plot, individual who has family history of Obesity  who are tend to sometimes eat food between meals. For instance, people who do not have any family history of Obesity are rarely to diagnose as Obese
+
+### Analyzing the effect of the food consumption between meals dan the family history with overweight on the Obesity level
+```{r}
+## DATA COSTUM 4
+alcohol_water <- obesity_new %>%
+  select(c(Consumption_of_alcohol, Consumption_of_water_daily, Obesity)) %>%
+  group_by(Consumption_of_alcohol, Consumption_of_water_daily, Obesity) %>%
+  summarise(count = n()) %>%
+  ungroup()
+alcohol_water <- alcohol_water %>% mutate(label = glue("Total : {count}
+                                                        Obesity Type : {Obesity}
+                                                        Alcohol Consumption : {Consumption_of_alcohol}
+                                                        Water Daily Consumption : {Consumption_of_water_daily}"))
+```
+
+```{r}
+plotd <- ggplot(alcohol_water, mapping = aes(x = Consumption_of_alcohol, y = count, fill = Obesity, text = label)) +
+        geom_col(position = "dodge") +
+        facet_wrap(vars(Consumption_of_water_daily)) +
+        scale_fill_viridis(discrete = T, option = "C") +
+        scale_x_discrete(expand = expansion(mult = c(0.0001, 0.0001)))+
+        labs(title = "Daily Water Consumption",
+             x = "Alcohol Consumption",
+             y = NULL,
+             fill = "Obesity Type") +
+        theme(legend.title = element_blank(),
+              axis.text.x = element_text(hjust =1, angle =20),
+              plot.title = element_text(face = "bold"),
+              panel.background = element_rect(fill = "#ffffff"),
+              axis.line.y = element_line(colour = "grey"),
+              axis.line.x = element_blank(),
+              panel.grid = element_blank()) + coord_flip()
+ggplotly(plotd, tooltip = "text")
+```
+> The interactive bar plot clearly shows that most of the population irrespective consume Alcohol sometimes. While there was a very small proportion of the sample who always consumed Alcohol, there was a significant number of people who never drinks Alcohol. Beside that, the most population who are diagnose as Obese are came from the one who sometimes consume alcohol, the highest bar is from individual who drink water between 1 - 2L a day. 
+
+### Analyzing the effect of the food consumption between meals dan the family history with overweight on the Obesity level
+```{r}
+## DATA CUSTOM 5
+smoke_veggie <- obesity_new %>%
+  select(c(Frequency_of_consumption_of_vegetables, Smoke, Obesity)) %>%
+  group_by(Frequency_of_consumption_of_vegetables, Smoke, Obesity) %>%
+  summarise(count = n()) %>%
+  ungroup()
+smoke_veggie <- smoke_veggie %>% mutate(label = glue("Total : {count}
+                                                      Obesity Type : {Obesity}
+                                                      Frequency of Vegetable Consumption : {Frequency_of_consumption_of_vegetables}
+                                                      Smoke Type : {Smoke}"))
+```
+
+```{r}
+plote <- ggplot(smoke_veggie, mapping = aes(x = Frequency_of_consumption_of_vegetables, y = count, fill = Obesity, text = label)) +
+        geom_col(position = "dodge") +
+        facet_wrap(vars(Smoke)) +
+        scale_fill_viridis(discrete = T, option = "C") +
+        scale_x_discrete(expand = expansion(mult = c(0.0001, 0.0001)))+
+        labs(title = "Smoke Category",
+             x = "Frequency of Vegetable Consumption",
+             y = NULL,
+             fill = "Obesity Type") +
+        theme(legend.title = element_blank(),
+              axis.text.x = element_text(hjust = 1),
+              plot.title = element_text(face = "bold"),
+              panel.background = element_rect(fill = "#ffffff"),
+              axis.line.y = element_line(colour = "grey"),
+              axis.line.x = element_blank(),
+              panel.grid = element_blank())
+ggplotly(plote, tooltip = "text")
+```
+> The interactive bar graph clearly indicates that the majority of people who do not smoke are obese. Individuals who eat vegetables on a regular basis set the highest bar.
+
+
+## BMI Distribution on Age by Gender: 
+```{r}
+obesity_new$bmi <- obesity_new$Weight/(obesity_new$Height/100)**2
+obesity_new$bmi <- round(obesity_new$bmi, 1)
+
+obesity_bmi <- obesity_new %>%
+  select(c(bmi, Age, Gender)) %>% mutate(label = glue("BMI : {bmi}
+                                                        Age : {Age}
+                                                        Gender : {Gender}"))
+
+plotob_bmi <- ggplot(data = obesity_bmi, aes(x = Age, y = bmi, fill = Gender, text = label))+
+  geom_point(aes(col = Gender), alpha = 0.5, col ="black") +
+  labs(title = list(text = paste0('BMI on Age Distribution')),
+    x = "Age",
+    y = "BMI"
+  ) +
+  theme(legend.title = element_blank(),
+        plot.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "#ffffff"),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.x = element_line())
+ggplotly(plotob_bmi, tooltip = "text")
+```
+
+## Normal BMI on Adults (>= 18 y.o)
+```{r}
+obesity_bmi_a <- obesity_bmi[obesity_bmi$Age >18 & obesity_bmi$bmi > 18.5 & obesity_bmi$bmi < 24.9,]
+#obesity_bmi_a %>% group_by(Gender) %>% summarise(count = n())
+
+plotob_bmi_a <- ggplot(data = obesity_bmi[obesity_bmi$Age >18 & obesity_bmi$bmi > 18.5 & obesity_bmi$bmi < 24.9,], aes(x = bmi, fill = Gender))+
+  geom_histogram(position = "dodge", bins = 30) + 
+  scale_y_continuous(breaks = seq(5,15,5), limits=c(0,15)) +
+  labs(title = "Normal BMI on Adults",
+             x = "BMI",
+             y = NULL,
+             fill = "Gender") +
+        theme(legend.title = element_blank(),
+              axis.text.x = element_text(hjust = 1),
+              plot.title = element_text(face = "bold"),
+              panel.background = element_rect(fill = "#ffffff"),
+              axis.line.y = element_line(colour = "grey"),
+              axis.line.x = element_blank(),
+              panel.grid = element_line(colour = "black"))
+ggplotly(plotob_bmi_a, tooltip = "text")
+```
+> According to the graph, there are more adult females (56) than adult males (45) in the Normal BMI range who are above the age of 18. Furthermore, while this figure represents the Normal BMI range of 18.5 to 24.9, the majority of the sample is in the second half of the range, implying slightly heavier weight than the range's median.
+
+# Conclusion : 
+Moreover half of the population does not meet the Normal BMI Standard, which is limited to 101 people. Both males and females have dominated the Obesity type on the Gender plot, showing that the distribution is nearly equal. Individuals who eat more than three times per day, consume high-calorie foods and do not track their food's calories are at risk of becoming obese, according to their eating habits. Individuals who do not smoke and do not/rarely consume alcohol may be classified as obese in the alcohol and smoking variable.
